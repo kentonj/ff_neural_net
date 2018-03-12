@@ -1,6 +1,6 @@
-#import scipy, scipy.io
+import scipy, scipy.io
 import numpy as np
-import math
+#import math
 #import sklearn as sk
 #NOTES: * is .* , and @ is matrix multiplication
 
@@ -8,8 +8,37 @@ def sigmoid(z):
     sig = (1.0 /(1.0+np.exp(-1.0 * z)))
     return sig
 
+def sigmoidGradient(z):
+    sigGrad = sigmoid(z)*(1-sigmoid(z))
+    return sigGrad
 
-def calculateC_G(X, y, lam, num_labels, unrolledTheta, numLayers, layerSpecs):
+def logicalYMatrix(vectorY, numberLabels):
+    '''
+    creates a logical array for classification:
+    input: [[2],[3],[1]]
+    output: [[0,1,0],[0,0,1],[1,0,0]]
+    '''
+    logicalArray = np.zeros((vectorY.shape[0],numberLabels))
+    for i in range(logicalArray.shape[0]):
+        logicalArray[i,(vectorY[i]-1)] = 1
+        #print(logicalArray[i])
+    return logicalArray
+
+
+
+def initializeRandomTheta(netSpecs, eps = 0.12):
+    '''
+    This initializes a long array of random values for all the theta matrices
+    Input: nodeSpecs(2,4,3) as before
+    '''
+    numValues = 0
+    for i in range(len(netSpecs)-1):
+        numValues += ((nodeSpecs[i]+1)*nodeSpecs[i+1])
+    randomTheta = (np.random.rand(numValues,1))*2*eps - eps
+    return randomTheta
+
+
+def calculateC_G(X, y, lam, num_labels, unrolledTheta,layerSpecs):
     '''
     Inputs:
     X: [m x n] matrix, m-number of training examples, n-number of inputs (features)
@@ -39,8 +68,10 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta, numLayers, layerSpecs):
 
     m = X.shape[0]
     #transforms unrolledTheta into a list of theta matrices
+    #also creates a list of grad Theta matrices
     #THIS WORKS
     thetaList = []
+    gradThetaList = []
     temp = 0
     for specs in matrixSizes:
         numRow = specs[0]
@@ -51,6 +82,7 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta, numLayers, layerSpecs):
         #print('size of row matrix', len(rowMatrix), '  row matrix:', rowMatrix)
         temp += numElements
         thetaList.append(np.reshape(rowMatrix, (numRow, numCol)))
+        gradThetaList.append(np.zeros((numRow, numCol)))
 
     #calculate Hypothesis, h:
     aList = [] #list of the nodes
@@ -58,6 +90,7 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta, numLayers, layerSpecs):
     #find value of hypothesis, h (loop based on number of layers), calculate, a, z
     for layer in range(len(layerSpecs)):
         if layer == 0: #special options for first iteration
+            print('first layer')
             # xShape = np.shape(X)
             # print(xShape)
             ones = (np.ones((np.shape(X)[0],1)))
@@ -82,7 +115,8 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta, numLayers, layerSpecs):
 
 
 
-    #calculating the cost, unregularized
+    #calculating the cost with the current parameters
+    #==================================================
     jMatrix = ((-y * np.log(h))-((1-y)*np.log(1-h)))
     j_theta = (1/m)*np.sum(jMatrix)
     #adding in regularized terms, omitting theta bias terms
@@ -90,25 +124,53 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta, numLayers, layerSpecs):
     for theta_i in range(len(thetaList)):
         theta_sums += np.sum(thetaList[theta_i][:,1:])
     j_theta += (lam/(2*m))*theta_sums
+    #==================================================
+
+    #calculating the gradients based on the current parameters
+    #==================================================
+    delList = []
+    for i in range((len(layerSpecs)-1),0,-1):
+        if i == (len(layerSpecs)-1):
+            #outermost step
+            del_val = h - y
+            delList.append(del_val)
+
+        else:
+            beta = del_val @ thetaList[i]
+            #throw out bias terms
+            beta = beta[:,1:] #reduce dimension of beta by one column
+            del_val = beta * sigmoidGradient(zList[i-2])
+            delList.insert(0, del_val)
+
+        #THIS ADDITION HAPPENS AFTER ALL STEPS
+        gradThetaList[i-1] += del_val.transpose() @ aList[i-1]
+        gradThetaList[i-1] = (1/m) * gradThetaList[i-1]
+        gradThetaList[i-1][:,1:] + ((lam/m) * thetaList[i-1][:,1:])
 
 
+    #==================================================
 
-
-    #TYPE AND DIMENSION CHECKERS
-    print('size X:', X.shape)
-    #print('type of X:', type(X))
-    for i in range(len(aList)):
-        print('size of matrix a',i,':', aList[i].shape)
-        #print('type of matrix a',i,':', type(aList[i]))
-    for i in range(len(zList)):
-        print('size of matrix z',i,':', zList[i].shape)
-        #print('type of matrix z',i,':', type(zList[i]))
-    for i in range(len(thetaList)):
-        print('size of matrix theta',i,':', thetaList[i].shape)
-        #print('type of matrix z',i,':', type(zList[i]))
-    print('size of h:', h.shape)
-    print('size of jMatrix:', jMatrix.shape)
-    print('jMatrix:\n', jMatrix)
+    # #TYPE AND DIMENSION CHECKERS
+    # print('size X:', X.shape)
+    # #print('type of X:', type(X))
+    # for i in range(len(aList)):
+    #     print('size of matrix a',i,':', aList[i].shape)
+    #     #print('type of matrix a',i,':', type(aList[i]))
+    # for i in range(len(zList)):
+    #     print('size of matrix z',i,':', zList[i].shape)
+    #     #print('type of matrix z',i,':', type(zList[i]))
+    # for i in range(len(thetaList)):
+    #     print('size of matrix theta',i,':', thetaList[i].shape)
+    #     #print('type of matrix z',i,':', type(zList[i]))
+    # for i in range(len(gradThetaList)):
+    #     print('size of matrix gradTheta',i,':', gradThetaList[i].shape)
+    #     #print('type of matrix z',i,':', type(zList[i]))
+    # for i in range(len(delList)):
+    #     print('size of matrix del',i,':', delList[i].shape)
+    #     #print('type of matrix z',i,':', type(zList[i]))
+    # print('size of h:', h.shape)
+    # print('size of jMatrix:', jMatrix.shape)
+    # #print('jMatrix:\n', jMatrix)
     print('J(theta):', j_theta)
 
     return j_theta
@@ -117,36 +179,41 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta, numLayers, layerSpecs):
 # yVector = mat_contents['y']
 
 
-def logicalYMatrix(vectorY, numberLabels):
-    '''
-    creates a logical array for classification:
-    input: [[2],[3],[1]]
-    output: [[0,1,0],[0,0,1],[1,0,0]]
-    '''
-    logicalArray = np.zeros((vectorY.shape[0],numberLabels))
-    for i in range(logicalArray.shape[0]):
-        logicalArray[i,(vectorY[i]-1)] = 1
-        #print(logicalArray[i])
-    return logicalArray
-
-
-
-def initializeRandomTheta(netSpecs, eps = 0.12):
-    '''
-    This initializes a long array of random values for all the theta matrices
-    Input: nodeSpecs(2,4,3) as before
-    '''
-    numValues = 0
-    for i in range(len(netSpecs)-1):
-        numValues += ((nodeSpecs[i]+1)*nodeSpecs[i+1])
-    randomTheta = (np.random.rand(numValues,1))*2*eps - eps
-    return randomTheta
 
 # #these have to have the same number of rows!!!!
-y_ = np.array([[1],[3],[2],[1]])
-y = logicalYMatrix(y_,3)
-x = np.array([[0.3, 1],[2, 7],[99, 1],[2, 0.6]])
-nodeSpecs = (2,4,3)
-theta = initializeRandomTheta(nodeSpecs)
-lam = 2
-calculateC_G(x,y,lam, 3,theta,10,nodeSpecs)
+# y_ = np.array([[1],[3],[2],[1]])
+# y = logicalYMatrix(y_,3)
+# x = np.array([[0.3, 1],[2, 7],[99, 1],[2, 0.6]])
+
+mat_contents = scipy.io.loadmat('sampleData.mat')
+x_mat = mat_contents['X']
+y_vec = mat_contents['y']
+y_mat = logicalYMatrix(y_vec,10)
+
+theta_contents = scipy.io.loadmat('ex4weights.mat')
+theta1 = theta_contents['Theta1']
+theta2 = theta_contents['Theta2']
+theta2_flat = theta2.flatten()
+theta1_flat = theta1.flatten()
+
+
+theta = np.concatenate((theta1_flat, theta2_flat))
+
+
+
+# theta2_reshape = np.reshape(theta2_flat, (10,26))
+# print('===========================')
+# print(theta2)
+# print('===========================')
+# print(theta2_reshape)
+# print('===========================')
+# print(theta2.shape)
+# print(theta2_reshape.shape)
+
+
+
+nodeSpecs = (400,25,10)
+numLabels = nodeSpecs[-1]
+#theta = initializeRandomTheta(nodeSpecs)
+lam = 1
+calculateC_G(x_mat,y_mat,lam, numLabels,theta,nodeSpecs)
