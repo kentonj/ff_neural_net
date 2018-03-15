@@ -38,7 +38,7 @@ def initializeRandomTheta(netSpecs, eps = 0.12):
     return randomTheta
 
 
-def calculateC_G(X, y, lam, num_labels, unrolledTheta,layerSpecs):
+def cost_and_gradient(unrolledTheta, X, y, lam, num_labels, layerSpecs):
     '''
     Inputs:
     X: [m x n] matrix, m-number of training examples, n-number of inputs (features)
@@ -50,6 +50,13 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta,layerSpecs):
     ----------------------------------
     Outputs:
     cost = floating point number of cost based on current values of theta
+    gradient = array of gradients for theta
+
+    -------------
+    a = cost_and_gradient(........)
+    a[0] - returns the cost function
+    a[1] - returns the gradient
+    -------------
 
     ALL INDICES START FROM 0
 
@@ -88,6 +95,7 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta,layerSpecs):
     aList = [] #list of the nodes
     zList = [] #list of the intermediate values
     #find value of hypothesis, h (loop based on number of layers), calculate, a, z
+    #Feed forward programming
     for layer in range(len(layerSpecs)):
         if layer == 0: #special options for first iteration
             print('first layer')
@@ -113,17 +121,17 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta,layerSpecs):
             aVal = np.append(ones,aVal, axis = 1)
             aList.append(aVal)
 
-
-
     #calculating the cost with the current parameters
     #==================================================
     jMatrix = ((-y * np.log(h))-((1-y)*np.log(1-h)))
-    j_theta = (1/m)*np.sum(jMatrix)
+    jTheta = (1/m)*np.sum(jMatrix)
+
     #adding in regularized terms, omitting theta bias terms
     theta_sums = 0
     for theta_i in range(len(thetaList)):
-        theta_sums += np.sum(thetaList[theta_i][:,1:])
-    j_theta += (lam/(2*m))*theta_sums
+        theta_squared = np.square(thetaList[theta_i][:,1:])
+        theta_sums += np.sum(theta_squared)
+    jTheta += (lam/(2*m))*theta_sums
     #==================================================
 
     #calculating the gradients based on the current parameters
@@ -171,16 +179,14 @@ def calculateC_G(X, y, lam, num_labels, unrolledTheta,layerSpecs):
     # print('size of h:', h.shape)
     # print('size of jMatrix:', jMatrix.shape)
     # #print('jMatrix:\n', jMatrix)
-    print('J(theta):', j_theta)
+    # print('J(theta):', jTheta)
 
-    return j_theta
+    return jTheta, gradThetaList
 # mat_contents= scipy.io.loadmat('sampleData.mat')
 # xMatrix = mat_contents['X']
 # yVector = mat_contents['y']
 
-
-
-# #these have to have the same number of rows!!!!
+#these have to have the same number of rows!!!!
 # y_ = np.array([[1],[3],[2],[1]])
 # y = logicalYMatrix(y_,3)
 # x = np.array([[0.3, 1],[2, 7],[99, 1],[2, 0.6]])
@@ -216,4 +222,12 @@ nodeSpecs = (400,25,10)
 numLabels = nodeSpecs[-1]
 #theta = initializeRandomTheta(nodeSpecs)
 lam = 1
-calculateC_G(x_mat,y_mat,lam, numLabels,theta,nodeSpecs)
+C_G = cost_and_gradient(theta, x_mat, y_mat, lam, numLabels, nodeSpecs)
+print(C_G[0])
+print(C_G[1])
+
+input_layer_size = 3;
+hidden_layer_size = 5;
+num_labels = 3;
+m = 5;
+node
