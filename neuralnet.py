@@ -23,7 +23,7 @@ def sigmoidGradient(z):
 
 
 
-def cost_and_grad(th, X, y, layer_specs, lam = 1):
+def cost_and_grad(theta, X, y, layer_specs, lam = 1):
     '''
 
     Description: this function computes the cost and the gradient of a neural net
@@ -46,8 +46,12 @@ def cost_and_grad(th, X, y, layer_specs, lam = 1):
         X = np.array(X)
     m = X.shape[0]
     #converts theta input and retrieves the matrices
-    theta = th.matrices
 
+    if type(y) == list:
+        y = np.array(y)
+    if y.shape[1] == 1:
+        #this means it isn't a logical array yet
+        y = logicalYMatrix(y)
 
     #FEED FORWARD
     #====================================================
@@ -88,7 +92,7 @@ def cost_and_grad(th, X, y, layer_specs, lam = 1):
     #adding in regularized terms, omitting theta bias terms
     #====================================================
     theta_sums = 0
-    for theta_i in range(len(theta)):
+    for theta_i in range(len(theta.matrices)):
         theta_sums += np.sum(np.square(theta[theta_i][:,1:]))
     jTheta += (lam/(2*m))*theta_sums
     #====================================================
@@ -99,7 +103,6 @@ def cost_and_grad(th, X, y, layer_specs, lam = 1):
     #====================================================
     grad_theta = Theta(layer_specs)
     grad_theta.set_zeros()
-    grad_th = grad_theta.matrices
 
     del_dict = {}
     for i in range((len(layer_specs)-1), 0, -1):
@@ -118,15 +121,16 @@ def cost_and_grad(th, X, y, layer_specs, lam = 1):
 
 
         additive = (1/m) * (del_val.transpose() @ a_dict[i-1])
-        grad_th[i-1] = grad_th[i-1] + additive
+        grad_theta[i-1] = grad_theta[i-1] + additive
         reg_term = ((lam/m) * theta[i-1][:,1:])
-        grad_th[i-1][:,1:] = grad_th[i-1][:,1:] + reg_term
-
+        grad_theta[i-1][:,1:] = grad_theta[i-1][:,1:] + reg_term
+        #grad_theta.set_theta_ind(grad_th[i-1], (i-1))
+        #print('Type of grad_th:', type(grad_th), '\n', grad_th)
         #sets grad_theta object to the newly adjusted theta
-        grad_theta.set_theta(grad_th)
+
 
     #====================================================
-
+    grad_theta.flatten_theta()
 
     return jTheta, grad_theta
 
@@ -220,6 +224,19 @@ class Theta(object):
         Theta.flatten_theta(self)
         return self.matrices
 
+    def set_theta_ind(self, new_th, new_key):
+        if type(new_theta) == list:
+            #convert to numpy array
+            new_th = np.array(new_th)
+
+        required_dims = Theta.required_theta_dims(self, new_key)
+        if new_theta.shape == required_dims: #new theta is same shape as expected shape
+            self.matrices[new_key] = new_th
+        elif (required_dims[0] * required_dims[1]) == new_th.size: #row vector
+            self.matrices[new_key] = np.reshape(new_th, required_dims)
+        else:
+            raise TypeError('Incorrect size or shape for theta, based on the neural net specs.')
+
     def required_theta_dims(self, dict_key):
         dict_key = int(dict_key) #forces it into an integer
         if dict_key > (len(self.specs) - 1): #catches theta outside of the acceptable range
@@ -237,7 +254,12 @@ class Theta(object):
         return self.matrices
 
     def __getitem__(self, key):
+
         return self.matrices[key]
+
+    def __setitem__(self, key, item):
+
+        self.matrices[key] = item
 
     def __str__(self):
         return str(self.matrices)
@@ -271,8 +293,9 @@ def check_gradient(theta, X, y, layer_specs, lam = 3): #THIS DOESN'T WORK YET
         num_grad[i] = (loss2 - loss1) / (2 * offset)
 
         delta[i] = 0 #return to zeros all around
+    num_grad_mat.set_theta(num_grad)
 
-    return theta, num_grad
+    return theta, num_grad_mat
 
 
 
@@ -314,12 +337,15 @@ test_grad.set_theta(testGrad.transpose())
 xyData = np.array(xyData)
 test_X = np.array(xyData[0:,:3])
 test_y = np.array((xyData[0:,3]))
+print()
 test_y = logicalYMatrix(test_y, 3)
 lambda_test = 3
 J, grad_nn = cost_and_grad(test_theta, test_X, test_y, test_specs, lambda_test)
 #theta, X, y, layer_specs, lam = 1
 
+
+
 # I THINK I AM LOSING SOME FIDELITY WHEN GOING FROM PANDAS into NUMPY
 output_theta, num_gradient = check_gradient(test_theta, test_X, test_y, test_specs)
-print('numerical gradient:\n', num_gradient)
-print('backprop gradient:\n', grad_nn.flatten_theta())
+print('numerical gradient:\n', num_gradient.flat)
+print('backprop gradient:\n', grad_nn.flat)
