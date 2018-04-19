@@ -27,7 +27,7 @@ class Theta(object):
                 self.flat = np.concatenate((self.flat, self.matrices[i_theta].flatten()))
         return self.flat
 
-    def generate_random_theta(self, eps = 0.12):
+    def generate_random_theta(self, eps = 0.3):
         #generates a dictionary of random theta values, with a dictionary key
         #correlating to it's position in the neural network
         #eps is the range in which the random values are generated (+/- eps)
@@ -219,14 +219,14 @@ def backprop(theta, y, h, a_dict, z_dict, lam, layer_specs):
         #print('Type of grad_th:', type(grad_th), '\n', grad_th)
         #sets grad_theta object to the newly adjusted theta
     #====================================================
+
     return grad_theta
 
-def check_gradient(theta, X, y, layer_specs, lam = 3): #THIS DOESN'T WORK YET
+def check_gradient(theta, X, y, layer_specs, lam):
     offset = 0.00000001
     #set theta to theta flat
     #set an array of zeros, iterate through adding the offset, then run the numerical gradient
     #iterate through and add the offset, run the
-
     new_theta = Theta(layer_specs)
     new_theta.set_theta(theta.get_flat())
     delta_mat = Theta(layer_specs, 0)
@@ -236,11 +236,12 @@ def check_gradient(theta, X, y, layer_specs, lam = 3): #THIS DOESN'T WORK YET
     num_grad = num_grad_mat.get_flat()
 
     for i in range(int(delta.size)):
+        print('...checking gradient number: '+str(i+1)+'/'+str(delta.size), end='\r')
+        # print('......running through each gradient.......', i, '/', delta.size)
         delta[i] = offset
         new_theta.set_theta(theta.get_flat() - delta)
         h, a_values, z_values = feed_forward(new_theta, X, y, layer_specs)
         loss1, cost_matrix = calculate_cost(new_theta, y, h, lam)
-
 
         new_theta.set_theta(theta.get_flat() + delta)
         h, a_values, z_values = feed_forward(new_theta, X, y, layer_specs)
@@ -267,7 +268,11 @@ def grad_descent(theta, gradients, alpha):
     theta.set_theta(new_theta_flat)
     return theta
 
-def train_nn(X, y, layer_specs, lam, max_iter = 20 , eps_limit = 0.1, numerical_check = False):
+def batch_grad_descent(theta, gradients, alpha):
+    #MAKE A FUNCTION HERE
+    return 
+
+def train_nn(X, y, layer_specs, lam, max_iter = 20 , eps_limit = 0.1, numerical_check = None):
     '''
     train the network's activation weights
 
@@ -285,50 +290,66 @@ def train_nn(X, y, layer_specs, lam, max_iter = 20 , eps_limit = 0.1, numerical_
         h, a_values, z_values = feed_forward(theta_train, X, y, layer_specs)
         theta_train_grad = backprop(theta_train, y, h, a_values, z_values, lam, layer_specs)
         cost, cost_matrix = calculate_cost(theta_train, y, h, lam)
+
+        if numerical_check == 'check_gradient' and i == 1:
+            #only checks the gradient on the first iteration
+            num_check = []
+            num_grad = check_gradient(theta_train, X, y, layer_specs, lam)
+            sum_difference = 0
+            m_theta = theta_train_grad.get_flat().shape[0]
+
+            for j in range(num_grad.get_flat().shape[0]):
+                difference = (theta_train_grad.get_flat()[j] - num_grad.get_flat()[j])
+                num_check.append([theta_train_grad.get_flat()[j], num_grad.get_flat()[j], difference])
+
+            print('backprop gradient - numerical gradient - difference')
+            for k in range(0, num_grad.get_flat().shape[0], int(num_grad.get_flat().shape[0]/20)):
+                print(num_check[k])
+            # average_difference = sum_difference / theta_train_grad.get_flat().shape[0]
+            # print('average difference between numerical gradient and backprop gradient:\n', average_difference)
+            num_check = np.array(num_check)
+            #print('backprop gradient - numerical gradient - difference\n', num_check)
+            input('press enter to continue training neural network weights.')
+
         #print('Theta before grad_descent:', theta_train.get_flat())
         #perform gradient descent, alter theta_train
-        theta_train = grad_descent(theta_train, theta_train_grad, 0.3)
+        theta_train = grad_descent(theta_train, theta_train_grad, 2.0)
         #print('Theta after grad_descent:', theta_train.get_flat())
         #update while loop conditional values
         eps = (temp_cost - cost)
+        print('cost after iteration '+ str(i) + ': ' + str(cost), end='\r')
+        if eps < 0:
+            print('Unstable optimization, training stopped.')
+            break
         temp_cost = cost #set temp_cost for next iteration
         i += 1
-
-        if numerical_check == True and i == 1:
-            #only checks the gradient on the first iteration
-            num_grad = check_gradient(theta_train, X, y, layer_specs, lam)
-            sum_difference = 0
-            for i in range(theta_train_grad.get_flat().shape[0]):
-                sum_difference += (theta_train_grad.get_flat()[i] - num_grad.get_flat()[i])
-            average_difference = sum_difference / theta_train_grad.get_flat().shape[0]
-            print('average difference between numerical gradient and backprop gradient:\n', average_difference)
-
-        print('cost after iteration', i-1, ':', cost)
-        print('eps:', eps)
-
-var_Data = pd.read_csv("lossData.csv", float_precision='round_trip')
-xyData = pd.read_csv("XYData.csv", float_precision='round_trip')
+    print('training of weights is now complete.                               ')
+    print('final cost:', cost)
+    print('change in cost from previous iteration:', eps)
+    return theta_train
 
 #test parameters to check against what my operations should actually result in.
-var_Data = np.array(var_Data)
-testTheta = var_Data[:,3]
-testGrad = var_Data[:,4]
-test_specs = (3,5,3)
-test_theta = Theta(test_specs)
-test_theta.set_theta(testTheta.transpose())
-test_grad = Theta(test_specs) #this might be wrong
-test_grad.set_theta(testGrad.transpose())
-xyData = np.array(xyData)
-test_X = np.array(xyData[0:,:3])
-test_y = np.array((xyData[0:,3]))
-print()
-test_y = logical_y_matrix(test_y, 3)
-test_lam = 3
+mat_contents = scipy.io.loadmat('sampleData.mat')
+x_mat = mat_contents['X']
+y_vec = mat_contents['y']
+y_mat = logical_y_matrix(y_vec,10)
+nn_specs = (400, 25, 10)
+lam = 1
 
-# h, a_values, z_values = feed_forward(test_theta, test_X, test_y, test_specs)
-# theta_train_grad = backprop(test_theta, test_y, h, a_values, z_values, test_lam, test_specs)
-# cost, cost_matrix = calculate_cost(test_theta, test_y, h, test_lam)
-#
-# print(cost)
+theta_contents = scipy.io.loadmat('ex4weights.mat')
+theta1 = theta_contents['Theta1']
+theta2 = theta_contents['Theta2']
+theta2_flat = theta2.flatten()
+theta1_flat = theta1.flatten()
+th = np.concatenate((theta1_flat, theta2_flat))
+test_theta = Theta(nn_specs)
+test_theta.set_theta(th)
 
-train_nn(test_X, test_y, test_specs, test_lam, max_iter = 1000, numerical_check = False)
+h_val, a_values, z_values = feed_forward(test_theta, x_mat, y_mat, nn_specs)
+theta_train_grad = backprop(test_theta, y_mat, h_val, a_values, z_values, lam, nn_specs)
+cost, cost_matrix = calculate_cost(test_theta, y_mat, h_val, lam)
+print('cost at fixed debugging parameters w/ lambda =', lam, ':', cost)
+
+#input('press enter to begin training neural network:\n')
+#print(x_mat.shape)
+trained_theta = train_nn(x_mat, y_mat, nn_specs, lam, max_iter = 1000)
