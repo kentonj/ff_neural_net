@@ -1,6 +1,9 @@
 import scipy, scipy.io
 import numpy as np
 import pandas as pd
+import random
+import matplotlib.pyplot as plt
+
 
 class Theta(object):
     #requires inputs of neural net specs (2,4,3)--number of nodes in each layer
@@ -138,8 +141,9 @@ def logical_y_matrix(vector_y, number_labels):
 
     return logical_y
 
-def feed_forward(theta, X, y, layer_specs):
-    m = y.shape[0]
+def feed_forward(theta, X, layer_specs):
+    #REMOVE y from this and from all instances where this function is called
+    m = X.shape[0]
 
     a_dict = {} #dict of the nodes
     z_dict = {} #dict of the intermediate values
@@ -156,6 +160,7 @@ def feed_forward(theta, X, y, layer_specs):
             aVal = sigmoid(zVal)
             a_dict[layer] = aVal
             h = aVal
+
         else:
             #middle layers
             zVal = a_dict[layer-1] @ theta[layer-1].transpose()
@@ -167,7 +172,6 @@ def feed_forward(theta, X, y, layer_specs):
             aVal = np.append(ones, aVal, axis = 1)
             a_dict[layer] = aVal
     #====================================================
-
     #need to return hypothesis (h), a_dict, z_dict
     return h, a_dict, z_dict
 
@@ -240,11 +244,11 @@ def check_gradient(theta, X, y, layer_specs, lam):
         # print('......running through each gradient.......', i, '/', delta.size)
         delta[i] = offset
         new_theta.set_theta(theta.get_flat() - delta)
-        h, a_values, z_values = feed_forward(new_theta, X, y, layer_specs)
+        h, a_values, z_values = feed_forward(new_theta, X, layer_specs)
         loss1, cost_matrix = calculate_cost(new_theta, y, h, lam)
 
         new_theta.set_theta(theta.get_flat() + delta)
-        h, a_values, z_values = feed_forward(new_theta, X, y, layer_specs)
+        h, a_values, z_values = feed_forward(new_theta, X, layer_specs)
         loss2, cost_matrix = calculate_cost(new_theta, y, h, lam)
 
         #reset new_theta after processing to theta.get_flat()
@@ -262,17 +266,138 @@ def grad_descent(theta, gradients, alpha):
     '''
     Takes one step in the gradient descent direction
     '''
-
-
     new_theta_flat = theta.get_flat() - alpha * gradients.get_flat()
     theta.set_theta(new_theta_flat)
     return theta
 
-def batch_grad_descent(theta, gradients, alpha):
-    #MAKE A FUNCTION HERE
-    return 
+def select_slice(Xdata, Ydata, number_batches = 5, batch_number = 0):
+    #start indexing at 0 -> n-1
+    m = Xdata.shape[0]
+    examples_per_batch = m // number_batches
+    start_idx = batch_number * examples_per_batch
+    end_idx = (batch_number + 1) * examples_per_batch
 
-def train_nn(X, y, layer_specs, lam, max_iter = 20 , eps_limit = 0.1, numerical_check = None):
+    #catch the end of the data set, if it's an uneven set
+    if batch_number == number_batches - 1:
+        end_idx = m
+
+    x_slice = Xdata[start_idx:end_idx,:]
+    y_slice = Ydata[start_idx:end_idx,:]
+
+    return x_slice, y_slice
+
+def run_nn():
+    #test parameters to check against what my operations should actually result in.
+
+    mat_contents = scipy.io.loadmat('sampleData.mat')
+    x_mat = mat_contents['X']
+    y_vec = mat_contents['y']
+    y_mat = logical_y_matrix(y_vec,10)
+    nn_specs = (400, 25, 10)
+    lam = 1
+    cost, trained_theta = train_nn(x_mat, y_mat, nn_specs, lam, max_iter = 100)
+    return cost, trained_theta
+
+def test_vals():
+    theta_contents = scipy.io.loadmat('ex4weights.mat')
+    theta1 = theta_contents['Theta1']
+    theta2 = theta_contents['Theta2']
+    theta2_flat = theta2.flatten()
+    theta1_flat = theta1.flatten()
+    th = np.concatenate((theta1_flat, theta2_flat))
+    test_theta = Theta(nn_specs)
+    test_theta.set_theta(th)
+
+    h_val, a_values, z_values = feed_forward(test_theta, x_mat, nn_specs)
+    theta_train_grad = backprop(test_theta, y_mat, h_val, a_values, z_values, lam, nn_specs)
+    cost, cost_matrix = calculate_cost(test_theta, y_mat, h_val, lam)
+    print('cost at fixed debugging parameters w/ lambda =', lam, ':', cost)
+
+def optimize_lambda():
+    mat_contents = scipy.io.loadmat('sampleData.mat')
+    x_mat = mat_contents['X']
+    y_vec = mat_contents['y']
+    y_mat = logical_y_matrix(y_vec,10)
+    nn_specs = (400, 25, 10)
+    lam = 0.01
+    #cost, train_theta, health, epsilon = train_nn(x_mat, y_mat, nn_specs, lam, max_iter = 100)
+    #print('lambda:', lam,  '----- health status:', health)
+    lam_cost_eps = []
+    #lam_cost_eps.append([lam, cost, epsilon])
+    upper_limit_found = False
+    while not upper_limit_found:
+        #this runs the training for 50 iterations with lambda 10x what it was previously
+        average_cost = 0
+        average_epsilon = 0
+        stable = True
+        for i in range(3):
+            cost, train_theta, health, epsilon = train_nn(x_mat, y_mat, nn_specs, lam, max_iter = 100)
+            if health == 'unstable':
+                stable = False
+            average_cost += cost
+            average_epsilon += epsilon
+        average_cost /= 3
+        average_epsilon /= 3
+        if not stable:
+            print('reached unstable optimization! upper limit found')
+            upper_limit_found = True
+        elif stable:
+            lam *= 3
+        lam_cost_eps.append([lam, cost, epsilon])
+        print('\n=====================\nlam:', lam, ' cost:', cost, ' eps:', epsilon)
+        print('=====================\n\n')
+        # cost, train_theta, health = train_nn(x_mat, y_mat, nn_specs, lam, max_iter = 100)
+        # print('lambda:', lam,  '----- health status:', health)
+        # lam_and_cost.append([lam, cost, health])
+
+    print('lam_and_cost:\n', lam_cost_eps)
+    return lam_cost_eps
+
+def shuffle_data(x_mat, y_mat, sections = 'all'):
+    #could later insert
+
+    num_examples = x_mat.shape[0]
+    value_indices = list(range(num_examples))
+    random.shuffle(value_indices)
+    if sections == 'all':
+        end_index = num_examples
+    else:
+        end_index = int(num_examples / sections)
+
+    shuffled_x_section = x_mat[value_indices[0:end_index], :]
+    shuffled_y_section = y_mat[value_indices[0:end_index], :]
+
+    return shuffled_x_section, shuffled_y_section
+
+def load_data():
+    mat_contents = scipy.io.loadmat('sampleData.mat')
+    x_mat = mat_contents['X']
+    y_vec = mat_contents['y']
+    y_mat = logical_y_matrix(y_vec,10)
+    return x_mat, y_mat
+
+def split_data(x_all_data, y_all_data, train_fraction, validate_fraction, test_fraction):
+    if round((train_fraction + validate_fraction + test_fraction),1) != 1:
+        #this just requires the user to enter three fractions, though the test_fraction isn't used
+        raise ValueError("your fractions don't add up to 1, please re-enter fractions.")
+
+
+    train_end = int(train_fraction * y_all_data.shape[0])
+    validate_start = train_end
+    validate_end = validate_start + int(validate_fraction * y_all_data.shape[0])
+    test_start = validate_end
+
+    #split up the data into train, validate, and test
+    x_train = x_all_data[:train_end, :]
+    y_train = y_all_data[:train_end, :]
+    x_validate = x_all_data[validate_start:validate_end, :]
+    y_validate = y_all_data[validate_start:validate_end, :]
+    x_test = x_all_data[test_start:, :]
+    y_test = y_all_data[test_start:, :]
+
+    return x_train, y_train, x_validate, y_validate, x_test, y_test
+
+def train_nn(X, y, layer_specs, lam, max_iter = 20 , eps_limit = 0.1, numerical_check = None, descent_type = 'batch', number_batches = 5, batch_order = 'ordered', batch_mod_type = 'end', plot_input = False):
     '''
     train the network's activation weights
 
@@ -281,20 +406,96 @@ def train_nn(X, y, layer_specs, lam, max_iter = 20 , eps_limit = 0.1, numerical_
     theta_train = Theta(layer_specs)
     theta_train.generate_random_theta()
 
-    #feed forward, backpropagate and calculate cost
-    #keep iterating until you pass max_iter or eps drops below eps_limit
-    i = 0
+    if y.shape[0] != X.shape[0]:
+        raise ValueError('X and y do not have the same number of training examples.')
+    else:
+        m = y.shape[0]
+
+
     eps = 1000 # default
     temp_cost = 100000000000000
-    while (i <= max_iter):
-        h, a_values, z_values = feed_forward(theta_train, X, y, layer_specs)
-        theta_train_grad = backprop(theta_train, y, h, a_values, z_values, lam, layer_specs)
-        cost, cost_matrix = calculate_cost(theta_train, y, h, lam)
+    iteration_number = 0
+    #feed forward, backpropagate and calculate cost
+    #keep iterating until you pass max_iter or eps drops below eps_limit
 
-        if numerical_check == 'check_gradient' and i == 1:
+
+    i = 0
+
+    #setting up to plot
+    x_plt = []
+    y_plt = []
+    plt.xlabel = '# Training Iterations'
+    plt.ylabel = 'Cost (error function)'
+
+    if plot_input == True:
+        print('...live-plotting the first 200 training examples.')
+    while (i <= max_iter):
+        if descent_type == 'batch':
+            h, a_values, z_values = feed_forward(theta_train, X, layer_specs)
+            theta_train_grad = backprop(theta_train, y, h, a_values, z_values, lam, layer_specs)
+            cost, cost_matrix = calculate_cost(theta_train, y, h, lam)
+
+        elif descent_type == 'mini-batch':
+            if batch_order == 'ordered':
+                i_batch = i % number_batches
+            elif batch_order == 'random':
+                i_batch = random.randint(0, (number_batches - 1))
+
+            #choose the slice of data you want, based on batch number
+
+            x_mb, y_mb = select_slice(X, y, number_batches, i_batch)
+            h, a_values, z_values = feed_forward(theta_train, x_mb, layer_specs)
+            theta_train_grad = backprop(theta_train, y_mb, h, a_values, z_values, lam, layer_specs)
+            cost, cost_matrix = calculate_cost(theta_train, y_mb, h, lam)
+
+        elif descent_type == 'mini-batch-mod':
+            if batch_order == 'ordered':
+                i_batch = i % number_batches
+            elif batch_order == 'random':
+                i_batch = random.randint(0, (number_batches - 1))
+            #FINISH THIS
+            #this starts with mini-batch, and then changes to batch for the last few iterations
+            if batch_mod_type == 'end':
+                if i < (max_iter - int(max_iter / 20)):
+                    x_mb, y_mb = select_slice(X, y, number_batches, i_batch)
+                    h, a_values, z_values = feed_forward(theta_train, x_mb, layer_specs)
+                    theta_train_grad = backprop(theta_train, y_mb, h, a_values, z_values, lam, layer_specs)
+                    cost, cost_matrix = calculate_cost(theta_train, y_mb, h, lam)
+                elif i >= (max_iter - int(max_iter / 20)):
+                    # perform full gradient descent for the last 1/20th of training iterations, to reach stability
+                    h, a_values, z_values = feed_forward(theta_train, X, layer_specs)
+                    theta_train_grad = backprop(theta_train, y, h, a_values, z_values, lam, layer_specs)
+                    cost, cost_matrix = calculate_cost(theta_train, y, h, lam)
+
+            elif batch_mod_type == 'mixed':
+                #this isn't very effective
+                if i % int(m / 10) != 0:
+                    #this catches almost all of the iterations
+                    x_mb, y_mb = select_slice(X, y, number_batches, i_batch)
+                    h, a_values, z_values = feed_forward(theta_train, x_mb, layer_specs)
+                    theta_train_grad = backprop(theta_train, y_mb, h, a_values, z_values, lam, layer_specs)
+                    cost, cost_matrix = calculate_cost(theta_train, y_mb, h, lam)
+
+                elif i % int(m / 10) == 0:
+                    #this segment of normal gradient descent will happen 10 times during the training examples
+                    for j in range(number_batches * 5):
+                        h, a_values, z_values = feed_forward(theta_train, X, layer_specs)
+                        theta_train_grad = backprop(theta_train, y, h, a_values, z_values, lam, layer_specs)
+                        cost, cost_matrix = calculate_cost(theta_train, y, h, lam)
+                        i += 1 #still iterates it one time through for each iteration while it's in here
+                    i -= 1 #to remove one iteration
+
+        if (numerical_check == 'check_gradient' and i == 1):
             #only checks the gradient on the first iteration
             num_check = []
-            num_grad = check_gradient(theta_train, X, y, layer_specs, lam)
+            if descent_type == 'batch':
+                x_check = X
+                y_check = y
+            elif descent_type == 'mini-batch':
+                x_check = x_mb
+                y_check = y_mb
+
+            num_grad = check_gradient(theta_train, x_check, y_check, layer_specs, lam)
             sum_difference = 0
             m_theta = theta_train_grad.get_flat().shape[0]
 
@@ -318,38 +519,94 @@ def train_nn(X, y, layer_specs, lam, max_iter = 20 , eps_limit = 0.1, numerical_
         #update while loop conditional values
         eps = (temp_cost - cost)
         print('cost after iteration '+ str(i) + ': ' + str(cost), end='\r')
-        if eps < 0:
-            print('Unstable optimization, training stopped.')
-            break
+
+        #catches unstable optimization for batch gradient descent
+        if (descent_type == 'batch' and eps < 0):
+            print('\n------------------\nUnstable optimization, training stopped.')
+            print('previous cost:', temp_cost)
+            print('current cost:', cost)
+            print('------------------\n\n')
+            health_status = 'unstable'
+            return cost, theta_train, health_status, eps
+
         temp_cost = cost #set temp_cost for next iteration
+        if plot_input == True:
+
+            x_plt.append(i)
+            y_plt.append(cost)
+            # if i % 10 == 0:
+            #live plotting, prints for the first 200 iterations of training
+            if i < 200:
+                plt.plot(x_plt, y_plt)
+                plt.pause(0.05)
+            if i > (max_iter - 30):
+                #live plotting for the last 30 iterations
+                plt.plot(x_plt, y_plt)
+                plt.pause(0.05)
+
         i += 1
+
+    plt.close()
+    if plot_input == True:
+        print('\n...plotting entire training cost')
+        plt.plot(x_plt, y_plt)
+        plt.show()
+
+
     print('training of weights is now complete.                               ')
+    health_status = 'stable'
     print('final cost:', cost)
     print('change in cost from previous iteration:', eps)
-    return theta_train
+    return cost, theta_train, health_status, eps
 
-#test parameters to check against what my operations should actually result in.
-mat_contents = scipy.io.loadmat('sampleData.mat')
-x_mat = mat_contents['X']
-y_vec = mat_contents['y']
-y_mat = logical_y_matrix(y_vec,10)
-nn_specs = (400, 25, 10)
-lam = 1
+def predict_values(trained_theta, testing_x, nn_specs, cutoff = 0.5, print_check = False):
+    #cutoff is the point at which the program counts a number either as a 1 or 0
+    m = testing_x.shape[0]
+    h = feed_forward(trained_theta, testing_x, nn_specs)[0]
+    output_values = []
+    for i in range(m):
+        #go through all the rows
+        max_index = np.argmax(h[i,:])
+        if h[i, max_index] >= cutoff:
+            output_values.append([max_index])
+        elif h[i, max_index] < cutoff:
+            output_values.append([max_index])
 
-theta_contents = scipy.io.loadmat('ex4weights.mat')
-theta1 = theta_contents['Theta1']
-theta2 = theta_contents['Theta2']
-theta2_flat = theta2.flatten()
-theta1_flat = theta1.flatten()
-th = np.concatenate((theta1_flat, theta2_flat))
-test_theta = Theta(nn_specs)
-test_theta.set_theta(th)
+        if ((i % 100 == 0) and (print_check == True)): #grabs every 100th example to check
+            print('output number =', max_index, '\n here is the row:\n', h[i,:])
+    output_values = np.array(output_values)
+    return output_values
 
-h_val, a_values, z_values = feed_forward(test_theta, x_mat, y_mat, nn_specs)
-theta_train_grad = backprop(test_theta, y_mat, h_val, a_values, z_values, lam, nn_specs)
-cost, cost_matrix = calculate_cost(test_theta, y_mat, h_val, lam)
-print('cost at fixed debugging parameters w/ lambda =', lam, ':', cost)
+def evaluate_nn(trained_theta, x_test, y_test, net_specs):
+    #reformat y_test from 0 0 0 0 1 0 0 0 0  to 4
+    y_correct = []
+    for i in range(y_test.shape[0]):
+        max_index = np.argmax(y_test[i,:])
+        y_correct.append([max_index])
+    y_correct = np.array(y_correct)
 
-#input('press enter to begin training neural network:\n')
-#print(x_mat.shape)
-trained_theta = train_nn(x_mat, y_mat, nn_specs, lam, max_iter = 1000)
+    #test output with non-shuffled values
+    output_vals = predict_values(trained_theta, x_test, net_specs)
+
+    number_wrong = 0
+    for i in range(y_test.shape[0]):
+
+        if y_correct[i,0] != output_vals[i,0]:
+            number_wrong += 1
+
+    m = y_correct.shape[0]
+    print('total number incorrectly labeled:', number_wrong)
+    print('total test examples:', m)
+    print('percent correct:', round((((m - number_wrong) / m) * 100), 4))
+
+x_mat, y_mat = load_data()
+x_all_shuffled, y_all_shuffled = shuffle_data(x_mat, y_mat)
+
+x_train, y_train, x_vali, y_vali, x_test, y_test = split_data(x_all_shuffled, y_all_shuffled, 0.9, 0.0, 0.1)
+
+neural_net_specs = (400, 25, 10)
+
+print('training neural network...')
+trained_cost, trained_theta, trained_health, trained_eps = train_nn(x_train, y_train, neural_net_specs, lam = 0.05, max_iter = 1000, eps_limit = 0.1, numerical_check = None, descent_type = 'mini-batch-mod', number_batches = 7, batch_order = 'ordered', batch_mod_type = 'end', plot_input = True)
+
+evaluate_nn(trained_theta, x_test, y_test, neural_net_specs)
