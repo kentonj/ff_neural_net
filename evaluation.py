@@ -1,5 +1,6 @@
 import scipy, scipy.io
 import numpy as np
+import csv
 from netprocessing import *
 from dataprep import *
 from weightclass import Theta
@@ -7,7 +8,7 @@ from weightclass import Theta
 def predict_values(trained_theta, testing_x, nn_specs, cutoff = 0.5, print_check = False):
     #cutoff is the point at which the program counts a number either as a 1 or 0
     m = testing_x.shape[0]
-    h = feed_forward(trained_theta, testing_x, nn_specs)[0]
+    h = feed_forward_V2(trained_theta, testing_x)[0]
     output_values = []
     for i in range(m):
         #go through all the rows
@@ -43,6 +44,8 @@ def evaluate_nn(trained_theta, x_test, y_test, net_specs):
     print('total number incorrectly labeled:', number_wrong)
     print('total test examples:', m)
     print('percent correct:', round((((m - number_wrong) / m) * 100), 4))
+    percent_correct = round((((m - number_wrong) / m) * 100), 4)
+    return percent_correct
 
 def test_vals():
     theta_contents = scipy.io.loadmat('ex4weights.mat')
@@ -57,3 +60,19 @@ def test_vals():
     theta_train_grad = backprop(test_theta, y_mat, h_val, a_values, z_values, lam, nn_specs)
     cost = calculate_cost(test_theta, y_mat, h_val, lam)
     print('cost at fixed debugging parameters w/ lambda =', lam, ':', cost)
+
+def write_results_to_csv(correct_percent, final_cost, final_theta):
+    with open('results.csv','w') as file:
+        wr = csv.writer(file)
+        percentage = ['Percentage Correct:',str(correct_percent)]
+        wr.writerow(percentage)
+        cost = ['Final Cost:',str(final_cost)]
+        wr.writerow(cost)
+        wr.writerow([]) #blank ROW
+        title = ['Final Weight Matrices:']
+        wr.writerow(title)
+        for matrix in range(len(final_theta.net_specs)-1):
+            mat_number = ['Matrix: '+str(matrix)]
+            wr.writerow(mat_number)
+            for row in range(final_theta.get_matrix(matrix).shape[0]):
+                wr.writerow(final_theta.get_matrix(matrix)[row][:])
